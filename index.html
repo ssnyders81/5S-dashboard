@@ -12,31 +12,31 @@
     .ticker-container { overflow: hidden; white-space: nowrap; flex: 1; }
     .ticker {
       display: inline-flex;
-      animation: ticker-scroll 110s linear infinite; /* Change 110s to adjust speed (higher = slower) */
+      animation: ticker-scroll 120s linear infinite; /* Slightly slower for TV viewing */
     }
     @keyframes ticker-scroll {
       0% { transform: translateX(0); }
       100% { transform: translateX(-50%); }
     }
     .machine-box {
-      width: 400px;
-      min-width: 400px;
-      height: 260px;
-      margin-right: 24px;
-      border-radius: 16px;
+      width: 460px;
+      min-width: 460px;
+      height: 290px;
+      margin-right: 28px;
+      border-radius: 18px;
       color: white;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       text-align: center;
-      box-shadow: 0 10px 20px -4px rgb(0 0 0 / 0.4);
+      box-shadow: 0 12px 25px -4px rgb(0 0 0 / 0.45);
     }
     .weather-card {
       background-color: #1f2937;
       border-radius: 12px;
       padding: 14px 10px;
-      min-width: 120px;
+      min-width: 130px;
       text-align: center;
     }
   </style>
@@ -53,13 +53,13 @@
   </div>
 
   <!-- Ticker Area -->
-  <div class="flex-1 flex items-center bg-zinc-950 ticker-container pt-6">
+  <div class="flex-1 flex items-center bg-zinc-950 ticker-container pt-8">
     <div id="ticker" class="ticker"></div>
   </div>
 
   <!-- Footer -->
   <div class="px-10 py-3 bg-zinc-900 text-xs text-zinc-500 flex justify-between items-center">
-    <div>5S Status Dashboard • Rock Valley, IA • Machines: 26</div>
+    <div>5S Status Dashboard • Rock Valley, IA • 26 Machines</div>
     <div id="last-refresh">Last refreshed: Just now</div>
   </div>
 
@@ -67,7 +67,7 @@
     // === CONFIG ===
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRyhzfVo-5M7pV2DomrXkImf4wPKkSj8QghHK6tAatGQeCWQtwyyqUn0oJT77nLlPclKCxidzOdq6cW/pub?gid=0&single=true&output=csv";
     
-    const LAT = 43.205;   // Rock Valley, IA
+    const LAT = 43.205;
     const LON = -96.295;
     const MACHINES = ["111","112","121","128","130","131","135","140","141","142","143","144","145","150","151","160","161",
                       "113","117","118","120","122","123","124","126","303","310"];
@@ -90,11 +90,11 @@
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Weather for Rock Valley
+    // Weather in Fahrenheit
     async function loadWeather() {
       const container = document.getElementById('weather');
       try {
-        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=America/Chicago&forecast_days=4`);
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=America/Chicago&forecast_days=4&temperature_unit=fahrenheit`);
         const data = await res.json();
         container.innerHTML = '';
         for (let i = 0; i < 4; i++) {
@@ -121,9 +121,9 @@
       }
     }
     loadWeather();
-    setInterval(loadWeather, 3600000); // hourly
+    setInterval(loadWeather, 3600000);
 
-    // Load CSV and build ticker
+    // Load scores and build ticker
     function loadScores() {
       const tickerEl = document.getElementById('ticker');
       tickerEl.innerHTML = '<div class="mx-auto text-2xl text-zinc-400">Loading 5S data...</div>';
@@ -148,7 +148,6 @@
             }
           });
 
-          // Build infinite ticker (duplicate list for seamless loop)
           tickerEl.innerHTML = '';
           for (let copy = 0; copy < 2; copy++) {
             MACHINES.forEach(mach => {
@@ -159,12 +158,12 @@
               const box = document.createElement('div');
               box.className = `machine-box ${colorClass}`;
               box.innerHTML = `
-                <div class="text-6xl font-bold mb-2 tracking-tighter">${mach}</div>
-                <div class="text-4xl font-semibold mb-6">${total}/15</div>
-                <div class="grid grid-cols-3 gap-x-6 text-base w-full px-8">
-                  <div>Floor<br><span class="text-2xl">${s.floor}</span></div>
-                  <div>Bench<br><span class="text-2xl">${s.bench}</span></div>
-                  <div>Machine<br><span class="text-2xl">${s.machine}</span></div>
+                <div class="text-7xl font-bold mb-3 tracking-tighter">${mach}</div>
+                <div class="text-5xl font-semibold mb-7">${total}/15</div>
+                <div class="grid grid-cols-3 gap-x-8 text-lg w-full px-10">
+                  <div>Floor<br><span class="text-3xl">${s.floor}</span></div>
+                  <div>Bench<br><span class="text-3xl">${s.bench}</span></div>
+                  <div>Machine<br><span class="text-3xl">${s.machine}</span></div>
                 </div>
               `;
               tickerEl.appendChild(box);
@@ -174,12 +173,11 @@
         },
         error: function(err) {
           console.error("CSV Error:", err);
-          tickerEl.innerHTML = `<div class="mx-auto text-3xl text-red-400 text-center">Error loading CSV.<br>Check console (F12) for details.<br>Google may be blocking direct access.</div>`;
+          tickerEl.innerHTML = `<div class="mx-auto text-3xl text-red-400 text-center">Error loading CSV data.<br>Check F12 console if needed.</div>`;
         }
       });
     }
 
-    // Initial load + refresh every 60 seconds
     loadScores();
     setInterval(loadScores, 60000);
   </script>
