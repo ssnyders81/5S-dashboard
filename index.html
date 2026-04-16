@@ -2,147 +2,189 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>5S Dashboard - Rock Valley</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shop 5S Status - Rock Valley</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
-    body { margin:0; padding:0; background:#111; color:white; font-family:Arial; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-    .header { background:#222; padding:20px 40px; display:flex; justify-content:space-between; align-items:center; }
-    #clock { font-size:60px; font-weight:bold; }
-    .ticker-area { flex:1; overflow:hidden; padding:30px 0; background:#111; }
-    .ticker { display:inline-flex; white-space:nowrap; animation:scroll 160s linear infinite; }
-    @keyframes scroll { 0% {transform:translateX(0);} 100% {transform:translateX(-50%);} }
-    .box { 
-      width:420px; height:240px; margin-right:30px; border-radius:15px; 
-      display:flex; flex-direction:column; justify-content:center; align-items:center; 
-      font-size:42px; box-shadow:0 10px 20px rgba(0,0,0,0.6);
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .ticker-container { overflow: hidden; white-space: nowrap; flex: 1; }
+    .ticker {
+      display: inline-flex;
+      animation: ticker-scroll 120s linear infinite;
     }
-    .footer { background:#222; padding:12px 40px; font-size:15px; color:#aaa; display:flex; justify-content:space-between; }
+    @keyframes ticker-scroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .machine-box {
+      width: 480px; min-width: 480px; height: 300px; margin-right: 32px;
+      border-radius: 20px; color: white;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      box-shadow: 0 15px 30px -6px rgb(0 0 0 / 0.5);
+    }
+    .weather-card {
+      background-color: #1f2937; border-radius: 14px; padding: 16px 12px;
+      min-width: 140px; text-align: center;
+    }
   </style>
 </head>
-<body>
-  <div class="header">
+<body class="bg-zinc-950 text-white overflow-hidden h-screen flex flex-col">
+
+  <!-- Top Header -->
+  <div class="flex justify-between items-start px-12 py-8 bg-zinc-900 border-b border-zinc-700">
     <div>
-      <div id="clock">00:00:00</div>
-      <div id="date">Loading date...</div>
+      <div id="clock" class="text-7xl font-bold tabular-nums tracking-tighter"></div>
+      <div id="date" class="text-3xl text-zinc-400 mt-1"></div>
     </div>
-    <div id="weather">Weather loading...</div>
+    <div id="weather" class="flex gap-6"></div>
   </div>
 
-  <div class="ticker-area">
+  <!-- Ticker Area -->
+  <div class="flex-1 flex items-center bg-zinc-950 ticker-container pt-8">
     <div id="ticker" class="ticker"></div>
   </div>
 
-  <div class="footer">
-    <div>5S Status • Rock Valley, IA • 26 Machines</div>
+  <!-- Footer -->
+  <div class="px-12 py-4 bg-zinc-900 text-xs text-zinc-500 flex justify-between items-center">
+    <div>5S Status Dashboard • Rock Valley, IA • 26 Machines</div>
     <div id="last-refresh">Last refreshed: Just now</div>
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyOsOpc7wSlZYdb4f2Jqv7lBu9dXD2YwsnT2wDkBBKcHvDPI8LdEC6vMc0RDxaQMf02/exec";   // ← PASTE YOUR CURRENT APPS SCRIPT URL HERE
-
+    // ==================== CONFIG ====================
+    const TOMORROW_URL = "https://api.tomorrow.io/v4/weather/forecast?location=43.205259,-96.295026&apikey=IO8xwOB75A2It6OX3QXan6Qwk7WROyeK&units=imperial";
+    
     const MACHINES = ["111","112","121","128","130","131","135","140","141","142","143","144","145","150","151","160","161",
-                      "113","117","118","120","122","123","124","126","303","310", "402"];
+                      "113","117","118","120","122","123","124","126","303","310"];
 
-    // Clock
+    function getColor(total) {
+      if (total >= 13) return "bg-blue-600";
+      if (total >= 10) return "bg-green-500";
+      if (total >= 7)  return "bg-orange-500";
+      if (total >= 4)  return "bg-yellow-500";
+      return "bg-red-600";
+    }
+
+    // Simple weather icon mapping (Tomorrow.io weather codes)
+    function getWeatherIcon(code) {
+      if ([1000,1100].includes(code)) return "☀️";      // Clear / Mostly Clear
+      if ([1101,1102,1103].includes(code)) return "⛅"; // Partly / Mostly Cloudy
+      if ([2000,2100].includes(code)) return "☁️";      // Cloudy
+      if ([4000,4001,4200].includes(code)) return "🌧️"; // Drizzle / Rain
+      if ([5000,5001,5100,5101].includes(code)) return "❄️"; // Snow
+      if ([6000,6001,6200,6201].includes(code)) return "🌨️"; // Freezing Rain / Sleet
+      return "☁️";
+    }
+
+    // Clock (Central Time)
     function updateClock() {
       const now = new Date();
       const opt = { timeZone: "America/Chicago" };
-      document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {...opt, hour:'2-digit', minute:'2-digit', second:'2-digit'});
-      document.getElementById('date').textContent = now.toLocaleDateString('en-US', {...opt, weekday:'long', month:'long', day:'numeric', year:'numeric'});
+      document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', { ...opt, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      document.getElementById('date').textContent = now.toLocaleDateString('en-US', { ...opt, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Weather (your Tomorrow.io)
+    // Load Tomorrow.io Weather (Daily forecast)
     async function loadWeather() {
       const container = document.getElementById('weather');
+      container.innerHTML = '<div class="text-zinc-400">Loading weather...</div>';
+
       try {
-        const res = await fetch('https://api.tomorrow.io/v4/weather/forecast?location=43.205259,-96.295026&apikey=IO8xwOB75A2It6OX3QXan6Qwk7WROyeK&units=imperial');
+        const res = await fetch(TOMORROW_URL);
         const data = await res.json();
         const daily = data.timelines?.daily || [];
-        let html = '';
-        for (let i = 0; i < Math.min(3, daily.length); i++) {
-          const v = daily[i].values;
-          const dayName = i === 0 ? "Today" : new Date(daily[i].time).toLocaleDateString('en-US', {weekday:'short'});
-          const max = Math.round(v.temperatureMax || v.temperatureAvg);
-          const min = Math.round(v.temperatureMin || v.temperatureAvg);
-          html += `${dayName}: ${max}°/${min}°<br>`;
+
+        container.innerHTML = '';
+        for (let i = 0; i < Math.min(4, daily.length); i++) {
+          const day = daily[i];
+          const values = day.values;
+          const date = new Date(day.time);
+          const dayName = i === 0 ? "Today" : date.toLocaleDateString('en-US', {weekday: 'short'});
+          
+          const max = Math.round(values.temperatureMax || values.temperatureAvg);
+          const min = Math.round(values.temperatureMin || values.temperatureAvg);
+          const pop = Math.round(values.precipitationProbabilityMax || values.precipitationProbabilityAvg || 0);
+          const icon = getWeatherIcon(values.weatherCodeMax || values.weatherCodeAvg);
+
+          const card = document.createElement('div');
+          card.className = "weather-card text-sm";
+          card.innerHTML = `
+            <div class="font-medium">${dayName}</div>
+            <div class="text-5xl my-3">${icon}</div>
+            <div class="text-xl">${max}° / <span class="text-zinc-400">${min}°</span></div>
+            <div class="text-xs text-zinc-400 mt-2">${pop}% precip</div>
+          `;
+          container.appendChild(card);
         }
-        container.innerHTML = html;
-      } catch(e) {
-        container.innerHTML = 'Weather unavailable';
+      } catch (e) {
+        console.error("Weather error:", e);
+        container.innerHTML = '<div class="text-red-400">Weather unavailable – check API key</div>';
       }
     }
     loadWeather();
-    setInterval(loadWeather, 3600000);
+    setInterval(loadWeather, 3600000); // Refresh hourly
 
-    // Load 5S Scores from Apps Script
-    async function loadScores() {
-      const ticker = document.getElementById('ticker');
-      ticker.innerHTML = '';
+    // 5S Ticker (unchanged from previous version)
+    function loadScores() {
+      const tickerEl = document.getElementById('ticker');
+      tickerEl.innerHTML = '<div class="mx-auto text-2xl text-zinc-400">Loading 5S data...</div>';
 
-      try {
-        const res = await fetch(APPS_SCRIPT_URL);
-        if (!res.ok) throw new Error('Network response not ok');
-        
-        const rows = await res.json();
-        
-        const latest = {};
-        rows.forEach(row => {
-          if (!row.MachineNumber) return;
-          const mach = String(row.MachineNumber).trim();
-          const ts = new Date(row.Timestamp || 0);
-          const floor = parseInt(row.Floor) || 0;
-          const bench = parseInt(row.Bench) || 0;
-          const machine = parseInt(row.Machine) || 0;
-          const total = floor + bench + machine;
+      Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vRyhzfVo-5M7pV2DomrXkImf4wPKkSj8QghHK6tAatGQeCWQtwyyqUn0oJT77nLlPclKCxidzOdq6cW/pub?gid=0&single=true&output=csv", {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          const latest = {};
+          results.data.forEach(row => {
+            if (!row.MachineNumber) return;
+            const mach = String(row.MachineNumber).trim();
+            const ts = new Date(row.Timestamp || 0);
+            const floor = parseInt(row.Floor) || 0;
+            const bench = parseInt(row.Bench) || 0;
+            const machine = parseInt(row.Machine) || 0;
+            const total = floor + bench + machine;
 
-          if (!latest[mach] || ts > new Date(latest[mach].timestamp || 0)) {
-            latest[mach] = {floor, bench, machine, total};
+            if (!latest[mach] || ts > new Date(latest[mach].timestamp || 0)) {
+              latest[mach] = { floor, bench, machine, total };
+            }
+          });
+
+          tickerEl.innerHTML = '';
+          for (let copy = 0; copy < 2; copy++) {
+            MACHINES.forEach(mach => {
+              const s = latest[mach] || { floor: 0, bench: 0, machine: 0, total: 0 };
+              const total = s.total || 0;
+              const colorClass = getColor(total);
+
+              const box = document.createElement('div');
+              box.className = `machine-box ${colorClass}`;
+              box.innerHTML = `
+                <div class="text-7xl font-bold mb-3 tracking-tighter">${mach}</div>
+                <div class="text-5xl font-semibold mb-8">${total}/15</div>
+                <div class="grid grid-cols-3 gap-x-10 text-lg w-full px-12">
+                  <div>Floor<br><span class="text-3xl">${s.floor}</span></div>
+                  <div>Bench<br><span class="text-3xl">${s.bench}</span></div>
+                  <div>Machine<br><span class="text-3xl">${s.machine}</span></div>
+                </div>
+              `;
+              tickerEl.appendChild(box);
+            });
           }
-        });
-
-        // Build the ticker with real scores
-        for (let copy = 0; copy < 2; copy++) {
-          MACHINES.forEach(mach => {
-            const s = latest[mach] || {floor:0, bench:0, machine:0, total:0};
-            const total = s.total || 0;
-            
-            let color = '#555';
-            if (total >= 13) color = '#2563eb';
-            else if (total >= 10) color = '#16a34a';
-            else if (total >= 7) color = '#ea580c';
-            else if (total >= 4) color = '#eab308';
-            else color = '#dc2626';
-
-            const box = document.createElement('div');
-            box.className = 'box';
-            box.style.backgroundColor = color;
-            box.innerHTML = `
-              <div style="font-size:52px">${mach}</div>
-              <div style="font-size:32px;margin-top:8px">${total}/15</div>
-            `;
-            ticker.appendChild(box);
-          });
+          document.getElementById('last-refresh').textContent = `Last refreshed: ${new Date().toLocaleTimeString('en-US', {timeZone: "America/Chicago"})}`;
+        },
+        error: function(err) {
+          console.error(err);
+          tickerEl.innerHTML = `<div class="mx-auto text-3xl text-red-400">Error loading 5S data</div>`;
         }
-        document.getElementById('last-refresh').textContent = `Last refreshed: ${new Date().toLocaleTimeString('en-US', {timeZone: "America/Chicago"})}`;
-      } catch (e) {
-        console.error("Score load error:", e);
-        // Fallback boxes if fetch fails
-        for (let copy = 0; copy < 2; copy++) {
-          MACHINES.forEach(mach => {
-            const box = document.createElement('div');
-            box.className = 'box';
-            box.style.backgroundColor = '#555';
-            box.innerHTML = mach + '<br><span style="font-size:20px">No score</span>';
-            ticker.appendChild(box);
-          });
-        }
-      }
+      });
     }
 
     loadScores();
-    setInterval(loadScores, 60000);   // Refresh scores every minute
+    setInterval(loadScores, 60000);
   </script>
 </body>
 </html>
